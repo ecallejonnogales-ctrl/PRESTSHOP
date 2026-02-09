@@ -12,10 +12,14 @@ const CONFIG = {
   categoria_default: 19,
 };
 
-// PrestaShop connection (override via env vars)
+// PrestaShop connection (override via env vars or from UI)
 const PRESTASHOP = {
   url: process.env.PRESTASHOP_URL || 'https://pruebas.todouniforme.com',
   apiKey: process.env.PRESTASHOP_API_KEY || '',
+  // Admin panel credentials (needed for texture upload - webservice doesn't support it)
+  adminUrl: process.env.PRESTASHOP_ADMIN_URL || '',  // e.g. https://pruebas.todouniforme.com/admin123
+  adminEmail: process.env.PRESTASHOP_ADMIN_EMAIL || '',
+  adminPassword: process.env.PRESTASHOP_ADMIN_PASSWORD || '',
 };
 
 // IDs de características en el back office

@@ -363,7 +363,9 @@ async function updateStock(stockAvailable, newQuantity) {
   return resp.data;
 }
 
-// ========== COLOR ICON / TEXTURE ==========
+// ========== COLOR ICON / TEXTURE (via Admin Panel) ==========
+// PrestaShop webservice NO soporta subir texturas de atributos.
+// Se hace simulando el formulario del panel admin.
 
 /** Descargar imagen del icono de color desde URL de Gary's */
 async function downloadColorIcon(url) {
@@ -381,31 +383,193 @@ async function downloadColorIcon(url) {
   return Buffer.from(resp.data);
 }
 
+// Sesion admin cacheada (cookies + token)
+let adminSession = null;
+
 /**
- * Subir imagen de textura/icono a un atributo de color (product_option_value)
- * PrestaShop API: POST /api/images/customizations/{id} NO funciona para atributos.
- * Para atributos se usa: POST /api/images/product_option_values/{id}
- * El campo se llama "image" en el multipart form.
+ * Login al panel admin de PrestaShop.
+ * Devuelve { cookies, adminToken } para usar en peticiones posteriores.
  */
-async function uploadColorTexture(colorAttributeId, imageBuffer, filename) {
-  const form = new FormData();
-  form.append('image', imageBuffer, {
-    filename: filename || 'color-icon.jpg',
-    contentType: 'image/jpeg',
+async function adminLogin(adminUrl, email, password) {
+  // Si ya tenemos sesion valida, reutilizar
+  if (adminSession && adminSession.expires > Date.now()) {
+    return adminSession;
+  }
+
+  const loginUrl = `${adminUrl}/index.php`;
+
+  // 1. GET pagina de login para obtener el token CSRF
+  const loginPage = await axios.get(loginUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    maxRedirects: 5,
+    validateStatus: () => true,
   });
 
-  const resp = await retryRequest(() =>
-    axios.post(
-      `${PRESTASHOP.url}/api/images/product_option_values/${colorAttributeId}`,
-      form,
-      {
-        auth: { username: PRESTASHOP.apiKey, password: '' },
-        headers: form.getHeaders(),
-        timeout: 30000,
-      }
-    )
-  );
-  return resp.data;
+  const html = loginPage.data;
+  const cookies = extractCookies(loginPage.headers['set-cookie']);
+
+  // Extraer token CSRF del formulario de login
+  const tokenMatch = html.match(/name="token"\s+value="([^"]+)"/);
+  const redirectMatch = html.match(/name="redirect"\s+value="([^"]*)"/);
+  const token = tokenMatch ? tokenMatch[1] : '';
+  const redirect = redirectMatch ? redirectMatch[1] : '';
+
+  // 2. POST login
+  const form = new URLSearchParams();
+  form.append('email', email);
+  form.append('passwd', password);
+  form.append('submitLogin', '1');
+  form.append('token', token);
+  form.append('redirect', redirect);
+
+  const loginResp = await axios.post(loginUrl, form.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': cookies,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    maxRedirects: 0,
+    validateStatus: () => true,
+  });
+
+  // Combinar cookies de login + respuesta
+  const newCookies = extractCookies(loginResp.headers['set-cookie']);
+  const allCookies = mergeCookies(cookies, newCookies);
+
+  // 3. Obtener el admin token (necesario para las peticiones)
+  // Seguir la redireccion para obtener el dashboard
+  const dashUrl = loginResp.headers.location || loginUrl;
+  const dashResp = await axios.get(dashUrl.startsWith('http') ? dashUrl : `${adminUrl}/${dashUrl}`, {
+    headers: {
+      'Cookie': allCookies,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    maxRedirects: 5,
+    validateStatus: () => true,
+  });
+
+  const dashCookies = mergeCookies(allCookies, extractCookies(dashResp.headers['set-cookie']));
+
+  // Extraer el admin_token del dashboard
+  const adminTokenMatch = dashResp.data.match(/token=([a-f0-9]{32})/);
+  const adminToken = adminTokenMatch ? adminTokenMatch[1] : token;
+
+  adminSession = {
+    cookies: dashCookies,
+    adminToken,
+    adminUrl,
+    expires: Date.now() + 30 * 60 * 1000, // 30 min cache
+  };
+
+  return adminSession;
+}
+
+/**
+ * Subir textura de color via admin panel.
+ * Simula: GET edit page → extraer token → POST form con fichero texture.
+ */
+async function uploadColorTexture(colorAttributeId, imageBuffer, filename, adminUrl, adminEmail, adminPassword) {
+  // 1. Login (o reutilizar sesion)
+  const session = await adminLogin(adminUrl, adminEmail, adminPassword);
+
+  // 2. GET la pagina de edicion del atributo para obtener el token del formulario
+  const editUrl = `${session.adminUrl}/index.php?controller=AdminAttributesGroups&id_attribute=${colorAttributeId}&updateattribute&token=${session.adminToken}`;
+
+  const editResp = await axios.get(editUrl, {
+    headers: {
+      'Cookie': session.cookies,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    maxRedirects: 5,
+    validateStatus: () => true,
+  });
+
+  const editHtml = editResp.data;
+
+  // Extraer el token especifico del form (puede ser diferente al general)
+  const formTokenMatch = editHtml.match(/name="token"\s+(?:type="hidden"\s+)?value="([^"]+)"/)
+    || editHtml.match(/value="([^"]+)"\s+(?:type="hidden"\s+)?name="token"/);
+  const formToken = formTokenMatch ? formTokenMatch[1] : session.adminToken;
+
+  // Extraer campos hidden del formulario
+  const idAttributeGroupMatch = editHtml.match(/name="id_attribute_group"\s+value="(\d+)"/);
+  const idAttributeGroup = idAttributeGroupMatch ? idAttributeGroupMatch[1] : '2';
+
+  // Extraer valores actuales del formulario (name, color hex, etc.)
+  const nameMatch = editHtml.match(/id="name_4"[^>]*value="([^"]*)"/);
+  const name4 = nameMatch ? nameMatch[1] : '';
+  const name1Match = editHtml.match(/id="name_1"[^>]*value="([^"]*)"/);
+  const name1 = name1Match ? name1Match[1] : name4;
+  const colorMatch = editHtml.match(/name="color"\s+[^>]*value="([^"]*)"/);
+  const colorHex = colorMatch ? colorMatch[1] : '#FFFFFF';
+
+  // 3. POST el formulario con la textura
+  const ext = (filename || 'color.png').split('.').pop().toLowerCase();
+  const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+
+  const form = new FormData();
+  form.append('id_attribute', String(colorAttributeId));
+  form.append('id_attribute_group', idAttributeGroup);
+  form.append('name_1', name1);
+  form.append('name_4', name4);
+  form.append('color', colorHex);
+  form.append('texture', imageBuffer, {
+    filename: filename || `color-${colorAttributeId}.png`,
+    contentType: mimeType,
+  });
+  form.append('token', formToken);
+  form.append('submitEditattribute', '1');
+
+  const submitUrl = `${session.adminUrl}/index.php?controller=AdminAttributesGroups`;
+
+  const submitResp = await axios.post(submitUrl, form, {
+    headers: {
+      ...form.getHeaders(),
+      'Cookie': session.cookies,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    maxRedirects: 0,
+    validateStatus: () => true,
+  });
+
+  // 302 redirect = exito, 200 = posible error en el form
+  if (submitResp.status === 302 || submitResp.status === 301) {
+    return { success: true, attributeId: colorAttributeId };
+  }
+
+  // Verificar si hay mensaje de error en la respuesta
+  if (submitResp.data && submitResp.data.includes('alert-danger')) {
+    const errMatch = submitResp.data.match(/alert-danger[^>]*>([\s\S]*?)<\/div>/);
+    throw new Error(errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'Error desconocido en el formulario admin');
+  }
+
+  return { success: true, attributeId: colorAttributeId };
+}
+
+/** Helper: extraer cookies de headers set-cookie */
+function extractCookies(setCookieHeaders) {
+  if (!setCookieHeaders) return '';
+  const arr = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+  return arr.map(c => c.split(';')[0]).join('; ');
+}
+
+/** Helper: combinar cookies sin duplicar */
+function mergeCookies(existing, newOnes) {
+  if (!newOnes) return existing || '';
+  if (!existing) return newOnes;
+  const map = new Map();
+  const parse = (str) => str.split('; ').forEach(c => {
+    const [k, ...v] = c.split('=');
+    if (k && v.length) map.set(k.trim(), v.join('='));
+  });
+  parse(existing);
+  parse(newOnes);
+  return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+/** Resetear sesion admin (util si cambian credenciales) */
+function resetAdminSession() {
+  adminSession = null;
 }
 
 // ========== DOWNLOAD IMAGES (from Gary's URLs) ==========
@@ -432,6 +596,8 @@ module.exports = {
   createTalla,
   downloadColorIcon,
   uploadColorTexture,
+  adminLogin,
+  resetAdminSession,
   findProductByReference,
   getProduct,
   createProduct,

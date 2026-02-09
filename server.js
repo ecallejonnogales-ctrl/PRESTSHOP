@@ -53,6 +53,11 @@ app.post('/api/process',
     if (psUrl) PRESTASHOP.url = psUrl.replace(/\/$/, '');
     if (psKey) PRESTASHOP.apiKey = psKey;
 
+    // Admin panel credentials (needed for color texture uploads)
+    if (req.body.adminUrl) PRESTASHOP.adminUrl = req.body.adminUrl.replace(/\/$/, '');
+    if (req.body.adminEmail) PRESTASHOP.adminEmail = req.body.adminEmail;
+    if (req.body.adminPass) PRESTASHOP.adminPassword = req.body.adminPass;
+
     if (!PRESTASHOP.apiKey) {
       return res.status(400).json({ error: 'Se necesita la API Key de PrestaShop' });
     }

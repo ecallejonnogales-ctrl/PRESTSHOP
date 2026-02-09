@@ -245,6 +245,23 @@
           <input type="password" id="psKey" placeholder="Tu API Key de PrestaShop">
         </div>
       </div>
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #334155;">
+        <p style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.75rem;">Panel Admin (necesario para subir texturas de color)</p>
+        <div class="config-section" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div>
+            <label>URL Admin Panel</label>
+            <input type="text" id="adminUrl" placeholder="https://tu-tienda.com/admin123">
+          </div>
+          <div>
+            <label>Email Admin</label>
+            <input type="email" id="adminEmail" placeholder="admin@email.com">
+          </div>
+          <div>
+            <label>Password Admin</label>
+            <input type="password" id="adminPass" placeholder="Password del admin">
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- STEP 3: Process -->
@@ -331,10 +348,19 @@
     processBtn.addEventListener('click', async () => {
       const psUrl = document.getElementById('psUrl').value.trim();
       const psKey = document.getElementById('psKey').value.trim();
+      const adminUrl = document.getElementById('adminUrl').value.trim();
+      const adminEmail = document.getElementById('adminEmail').value.trim();
+      const adminPass = document.getElementById('adminPass').value.trim();
 
       if (!psKey) {
         alert('Introduce la API Key de PrestaShop');
         return;
+      }
+
+      if (!adminUrl || !adminEmail || !adminPass) {
+        if (!confirm('Sin credenciales del admin, no se podran subir las texturas de color. Continuar?')) {
+          return;
+        }
       }
 
       processBtn.disabled = true;
@@ -347,6 +373,9 @@
       formData.append('secondaryFile', secFileInput.files[0]);
       formData.append('psUrl', psUrl);
       formData.append('psKey', psKey);
+      if (adminUrl) formData.append('adminUrl', adminUrl);
+      if (adminEmail) formData.append('adminEmail', adminEmail);
+      if (adminPass) formData.append('adminPass', adminPass);
 
       try {
         const response = await fetch('/api/process', {

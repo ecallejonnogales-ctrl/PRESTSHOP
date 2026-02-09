@@ -216,18 +216,26 @@ async function processFiles(mainFileBuffer, secondaryFileBuffer, onProgress) {
             mapColores[producto.color_name_norm] = colorId;
             log(`   🎨 Color creado: "${producto.color_name_norm}" → ID:${colorId}`);
 
-            // Subir icono/textura del color si hay URL en el Excel
-            if (producto.icono_color_url && colorId) {
+            // Subir icono/textura del color via admin panel si hay URL y credenciales
+            const { PRESTASHOP: psConf } = require('./config');
+            if (producto.icono_color_url && colorId && psConf.adminUrl && psConf.adminEmail) {
               try {
                 log(`   🖼️ Descargando icono de color: ${producto.icono_color_url}`);
                 const iconBuffer = await api.downloadColorIcon(producto.icono_color_url);
                 if (iconBuffer && iconBuffer.length > 0) {
-                  await api.uploadColorTexture(colorId, iconBuffer, `color-${colorId}.jpg`);
-                  log(`   ✅ Icono de color subido para "${producto.color_name_norm}" (ID:${colorId})`);
+                  const urlParts = producto.icono_color_url.split('/');
+                  const originalFilename = urlParts[urlParts.length - 1] || `color-${colorId}.png`;
+                  await api.uploadColorTexture(
+                    colorId, iconBuffer, originalFilename,
+                    psConf.adminUrl, psConf.adminEmail, psConf.adminPassword
+                  );
+                  log(`   ✅ Textura subida para "${producto.color_name_norm}" (ID:${colorId})`);
                 }
               } catch (iconErr) {
-                log(`   ⚠️ Error subiendo icono de color "${producto.color_name_norm}": ${iconErr.message}`);
+                log(`   ⚠️ Error subiendo textura "${producto.color_name_norm}": ${iconErr.message}`);
               }
+            } else if (producto.icono_color_url && colorId && !psConf.adminUrl) {
+              log(`   ⚠️ Sin credenciales admin - no se puede subir textura para "${producto.color_name_norm}"`);
             }
           } catch (err) {
             log(`   ⚠️ Error creando color "${producto.color_name_norm}": ${err.message}`);
