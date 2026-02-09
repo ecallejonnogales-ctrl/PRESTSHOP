@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrestaShop Excel Processor - TodoUniforme</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding: 2rem 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    header h1 {
+      font-size: 1.8rem;
+      color: #38bdf8;
+      margin-bottom: 0.5rem;
+    }
+    header p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid #334155;
+    }
+    .card h2 {
+      font-size: 1.1rem;
+      color: #38bdf8;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card h2 .num {
+      background: #38bdf8;
+      color: #0f172a;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+    .upload-area {
+      border: 2px dashed #475569;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.05);
+    }
+    .upload-area.has-file {
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.05);
+    }
+    .upload-area input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .upload-area .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-area .label {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    .upload-area .filename {
+      color: #22c55e;
+      font-weight: 600;
+      margin-top: 0.5rem;
+    }
+    .config-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .config-section label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      margin-bottom: 0.3rem;
+    }
+    .config-section input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #e2e8f0;
+      padding: 0.6rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .config-section input:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 1rem;
+      background: #38bdf8;
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover:not(:disabled) {
+      background: #0ea5e9;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .log-area {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 1rem;
+      height: 400px;
+      overflow-y: auto;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .log-area .line {
+      padding: 1px 0;
+    }
+    .log-area .line.error { color: #f87171; }
+    .log-area .line.success { color: #4ade80; }
+    .log-area .line.info { color: #38bdf8; }
+    .log-area .line.warn { color: #fbbf24; }
+    .progress-bar {
+      background: #0f172a;
+      border-radius: 4px;
+      height: 6px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .stat {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 0.75rem;
+      text-align: center;
+    }
+    .stat .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .stat .label {
+      font-size: 0.7rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #resultSection { display: none; }
+    #resultSection.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PrestaShop Excel Processor</h1>
+      <p>TodoUniforme - Procesador de archivos Gary's para PrestaShop</p>
+    </header>
+
+    <!-- STEP 1: Upload files -->
+    <div class="card">
+      <h2><span class="num">1</span> Archivos Excel</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div>
+          <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 0.5rem;">Fichero principal (GARYS - CSV.xlsx)</p>
+          <div class="upload-area" id="mainDrop">
+            <input type="file" id="mainFile" accept=".xlsx,.xls,.csv">
+            <div class="icon">📄</div>
+            <div class="label">Arrastra o haz clic</div>
+            <div class="filename" id="mainFileName" style="display:none"></div>
+          </div>
+        </div>
+        <div>
+          <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 0.5rem;">Fichero secundario (Precios/Referencias)</p>
+          <div class="upload-area" id="secDrop">
+            <input type="file" id="secFile" accept=".xlsx,.xls,.csv">
+            <div class="icon">📄</div>
+            <div class="label">Arrastra o haz clic</div>
+            <div class="filename" id="secFileName" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Config -->
+    <div class="card">
+      <h2><span class="num">2</span> Configuracion PrestaShop</h2>
+      <div class="config-section">
+        <div>
+          <label>URL PrestaShop</label>
+          <input type="text" id="psUrl" value="https://pruebas.todouniforme.com" placeholder="https://tu-tienda.com">
+        </div>
+        <div>
+          <label>API Key</label>
+          <input type="password" id="psKey" placeholder="Tu API Key de PrestaShop">
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: Process -->
+    <div class="card">
+      <h2><span class="num">3</span> Procesar</h2>
+      <button class="btn" id="processBtn" disabled>Iniciar Procesamiento</button>
+    </div>
+
+    <!-- Results -->
+    <div id="resultSection">
+      <div class="card">
+        <h2>Progreso</h2>
+        <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+        <div class="stats">
+          <div class="stat"><div class="value" id="statCreated">0</div><div class="label">Creados</div></div>
+          <div class="stat"><div class="value" id="statUpdated">0</div><div class="label">Actualizados</div></div>
+          <div class="stat"><div class="value" id="statImages">0</div><div class="label">Imagenes</div></div>
+          <div class="stat"><div class="value" id="statErrors">0</div><div class="label">Errores</div></div>
+        </div>
+        <div class="log-area" id="logArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const mainFileInput = document.getElementById('mainFile');
+    const secFileInput = document.getElementById('secFile');
+    const processBtn = document.getElementById('processBtn');
+    const logArea = document.getElementById('logArea');
+    const resultSection = document.getElementById('resultSection');
+
+    let mainFileReady = false;
+    let secFileReady = false;
+
+    function setupUpload(input, dropId, nameId) {
+      const drop = document.getElementById(dropId);
+      const nameEl = document.getElementById(nameId);
+
+      input.addEventListener('change', () => {
+        if (input.files.length) {
+          drop.classList.add('has-file');
+          nameEl.textContent = input.files[0].name;
+          nameEl.style.display = 'block';
+          drop.querySelector('.label').style.display = 'none';
+          drop.querySelector('.icon').textContent = '✅';
+
+          if (dropId === 'mainDrop') mainFileReady = true;
+          else secFileReady = true;
+          checkReady();
+        }
+      });
+
+      drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+      drop.addEventListener('dragleave', () => { drop.classList.remove('dragover'); });
+      drop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        drop.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+          input.files = e.dataTransfer.files;
+          input.dispatchEvent(new Event('change'));
+        }
+      });
+    }
+
+    setupUpload(mainFileInput, 'mainDrop', 'mainFileName');
+    setupUpload(secFileInput, 'secDrop', 'secFileName');
+
+    function checkReady() {
+      processBtn.disabled = !(mainFileReady && secFileReady);
+    }
+
+    function addLog(msg) {
+      const line = document.createElement('div');
+      line.className = 'line';
+      if (msg.includes('❌') || msg.includes('Error')) line.className += ' error';
+      else if (msg.includes('✅') || msg.includes('🆕') || msg.includes('creado')) line.className += ' success';
+      else if (msg.includes('⚠️')) line.className += ' warn';
+      else if (msg.includes('Paso') || msg.includes('===')) line.className += ' info';
+      line.textContent = msg;
+      logArea.appendChild(line);
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    processBtn.addEventListener('click', async () => {
+      const psUrl = document.getElementById('psUrl').value.trim();
+      const psKey = document.getElementById('psKey').value.trim();
+
+      if (!psKey) {
+        alert('Introduce la API Key de PrestaShop');
+        return;
+      }
+
+      processBtn.disabled = true;
+      processBtn.textContent = 'Procesando...';
+      resultSection.classList.add('visible');
+      logArea.innerHTML = '';
+
+      const formData = new FormData();
+      formData.append('mainFile', mainFileInput.files[0]);
+      formData.append('secondaryFile', secFileInput.files[0]);
+      formData.append('psUrl', psUrl);
+      formData.append('psKey', psKey);
+
+      try {
+        const response = await fetch('/api/process', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const text = decoder.decode(value, { stream: true });
+          const lines = text.split('\n').filter(l => l.startsWith('data: '));
+
+          for (const line of lines) {
+            const data = line.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'log') {
+                addLog(parsed.message);
+              } else if (parsed.type === 'progress') {
+                const pct = parsed.current && parsed.total
+                  ? Math.round((parsed.current / parsed.total) * 100)
+                  : 0;
+                document.getElementById('progressFill').style.width = pct + '%';
+              } else if (parsed.type === 'stats') {
+                document.getElementById('statCreated').textContent = parsed.created || 0;
+                document.getElementById('statUpdated').textContent = parsed.combinations_updated || 0;
+                document.getElementById('statImages').textContent = parsed.images_uploaded || 0;
+                document.getElementById('statErrors').textContent = parsed.errors || 0;
+              } else if (parsed.type === 'done') {
+                addLog('');
+                addLog('✅ PROCESAMIENTO COMPLETADO');
+                document.getElementById('statCreated').textContent = parsed.results.created || 0;
+                document.getElementById('statUpdated').textContent = parsed.results.combinations_updated || 0;
+                document.getElementById('statImages').textContent = parsed.results.images_uploaded || 0;
+                document.getElementById('statErrors').textContent = parsed.results.errors?.length || 0;
+                document.getElementById('progressFill').style.width = '100%';
+              }
+            } catch (e) {
+              // Not JSON, just log raw
+              if (data.trim()) addLog(data);
+            }
+          }
+        }
+      } catch (err) {
+        addLog(`❌ Error de conexion: ${err.message}`);
+      }
+
+      processBtn.disabled = false;
+      processBtn.textContent = 'Iniciar Procesamiento';
+    });
+  </script>
+</body>
+</html>

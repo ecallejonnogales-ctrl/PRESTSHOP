@@ -1,0 +1,19 @@
+{
+  "name": "prestashop-excel-processor",
+  "version": "1.0.0",
+  "description": "Process Gary's Excel files and sync products to PrestaShop",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5",
+    "adm-zip": "^0.5.10",
+    "form-data": "^4.0.0",
+    "better-sqlite3": "^11.0.0"
+  }
+}
