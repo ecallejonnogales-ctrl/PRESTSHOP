@@ -44,6 +44,9 @@ function parseMainFile(buffer) {
       } else if (campoSistema === 'peso' || campoSistema === 'volumen') {
         const num = parseFloat(String(valor || '0').replace(',', '.'));
         producto[campoSistema] = isNaN(num) ? 0 : num;
+      } else if (campoSistema.endsWith('_url')) {
+        // URLs: no limpiar, solo trim
+        producto[campoSistema] = valor ? String(valor).trim() : '';
       } else {
         producto[campoSistema] = limpiarTexto(valor);
       }

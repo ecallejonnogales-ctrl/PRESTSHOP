@@ -215,6 +215,20 @@ async function processFiles(mainFileBuffer, secondaryFileBuffer, onProgress) {
             createdColors.set(producto.color_name_norm, colorId);
             mapColores[producto.color_name_norm] = colorId;
             log(`   🎨 Color creado: "${producto.color_name_norm}" → ID:${colorId}`);
+
+            // Subir icono/textura del color si hay URL en el Excel
+            if (producto.icono_color_url && colorId) {
+              try {
+                log(`   🖼️ Descargando icono de color: ${producto.icono_color_url}`);
+                const iconBuffer = await api.downloadColorIcon(producto.icono_color_url);
+                if (iconBuffer && iconBuffer.length > 0) {
+                  await api.uploadColorTexture(colorId, iconBuffer, `color-${colorId}.jpg`);
+                  log(`   ✅ Icono de color subido para "${producto.color_name_norm}" (ID:${colorId})`);
+                }
+              } catch (iconErr) {
+                log(`   ⚠️ Error subiendo icono de color "${producto.color_name_norm}": ${iconErr.message}`);
+              }
+            }
           } catch (err) {
             log(`   ⚠️ Error creando color "${producto.color_name_norm}": ${err.message}`);
           }

@@ -363,6 +363,51 @@ async function updateStock(stockAvailable, newQuantity) {
   return resp.data;
 }
 
+// ========== COLOR ICON / TEXTURE ==========
+
+/** Descargar imagen del icono de color desde URL de Gary's */
+async function downloadColorIcon(url) {
+  const resp = await retryRequest(() =>
+    axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/*,*/*',
+      },
+      validateStatus: (status) => status < 400,
+    })
+  );
+  return Buffer.from(resp.data);
+}
+
+/**
+ * Subir imagen de textura/icono a un atributo de color (product_option_value)
+ * PrestaShop API: POST /api/images/customizations/{id} NO funciona para atributos.
+ * Para atributos se usa: POST /api/images/product_option_values/{id}
+ * El campo se llama "image" en el multipart form.
+ */
+async function uploadColorTexture(colorAttributeId, imageBuffer, filename) {
+  const form = new FormData();
+  form.append('image', imageBuffer, {
+    filename: filename || 'color-icon.jpg',
+    contentType: 'image/jpeg',
+  });
+
+  const resp = await retryRequest(() =>
+    axios.post(
+      `${PRESTASHOP.url}/api/images/product_option_values/${colorAttributeId}`,
+      form,
+      {
+        auth: { username: PRESTASHOP.apiKey, password: '' },
+        headers: form.getHeaders(),
+        timeout: 30000,
+      }
+    )
+  );
+  return resp.data;
+}
+
 // ========== DOWNLOAD IMAGES (from Gary's URLs) ==========
 
 /** Descargar archivo ZIP de fotos desde URL de Gary's */
@@ -385,6 +430,8 @@ module.exports = {
   getTallas,
   createColor,
   createTalla,
+  downloadColorIcon,
+  uploadColorTexture,
   findProductByReference,
   getProduct,
   createProduct,
